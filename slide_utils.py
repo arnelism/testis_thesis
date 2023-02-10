@@ -71,7 +71,7 @@ def get_annotation(ann: dict) -> Polygon:
     if ann["geometry"]["type"] == "Polygon":
         coords: List[Tuple[int, int]] = ann["geometry"]["coordinates"][0]
     elif ann["geometry"]["type"] == "MultiPolygon":
-        print(f"Warning: feature {ann['id']} is multiPolygon")
+        print(f"Warning: feature {ann.get('id')} is multiPolygon")
         coords = list()
         for candidate in ann["geometry"]["coordinates"]:
             if len(candidate[0]) > len(coords):
