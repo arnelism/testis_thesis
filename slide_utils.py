@@ -68,8 +68,16 @@ def load_annotations(filename: str, offset: Tuple[int, int], is_feature_collecti
 
 
 def get_annotation(ann: dict) -> Polygon:
-    coords = ann["geometry"]["coordinates"][0]
-    return [(c[X_COORD], c[Y_COORD]) for c in coords]
+    if ann["geometry"]["type"] == "Polygon":
+        coords: List[Tuple[int, int]] = ann["geometry"]["coordinates"][0]
+    elif ann["geometry"]["type"] == "MultiPolygon":
+        print(f"Warning: feature {ann['id']} is multiPolygon")
+        coords = list()
+        for candidate in ann["geometry"]["coordinates"]:
+            if len(candidate[0]) > len(coords):
+                coords: List[Tuple[int, int]] = candidate[0]
+
+    return [( round(c[X_COORD]), round(c[Y_COORD])) for c in coords]
 
 
 def apply_offset(ann: Polygon, offset: Tuple[int, int]) -> Polygon:
@@ -112,7 +120,14 @@ def get_random_bounds(annotations: List[Polygon], level: int, width: int, height
 
 
 def get_slice(slide: openslide.OpenSlide, level: int, bounds: Bounds, annotations: AnnotationsGroup, debug=False):
-    img_pure = slide.read_region(location=bounds.topleft, level=level, size=bounds.get_size())
+    # img_pure = slide.read_region(location=bounds.topleft, level=level, size=bounds.get_size())
+    try:
+        img_pure = slide.read_region(location=bounds.topleft, level=level, size=bounds.get_size())
+    except Exception as e:
+        print("\nBAD BOUNDS:")
+        print(bounds)
+        print(e)
+        return None
     img_seg = Image.new("RGBA", bounds.get_size())
 
     # go thru all polygons. for each draw it

@@ -3,6 +3,7 @@
 dataset
 data
 output
+work
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

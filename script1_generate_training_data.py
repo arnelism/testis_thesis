@@ -2,18 +2,20 @@
 # Generates training image slices from a provided OpenSlide slide
 # Can create test data, training data, or both
 # Supports various tubule overlap settings and zoom levels
+import argparse
 import json
 import shutil
 import os
 import statistics
-from typing import List
+from typing import List, Optional
 
 import openslide
+from dotenv import load_dotenv
 
 from augmentations import apply_random_augmentation
 from slide_utils import load_annotations, get_random_bounds, get_slice, get_annotated_area_ratio, print_progress, \
     AnnotationsGroup, get_slide_offset, Polygon
-
+from os.path import abspath
 
 def generate_slices(
         slide: openslide.OpenSlide,
@@ -43,7 +45,12 @@ def generate_slices(
     while img_idx < num_images:
         bounds = get_random_bounds(sampling_polygons, level, width, height, wiggle)
         # TODO: maybe generate bounds truly randomly, from region, not from annotations?
-        orig, seg, debug = get_slice(slide, level, bounds, annotations, debug=True)
+        pics = get_slice(slide, level, bounds, annotations, debug=True)
+        if pics is None:
+            print(f"Failed to get pic at bounds {bounds}")
+            continue
+
+        orig, seg, debug = pics
 
 
         tubule_ratio = get_annotated_area_ratio(seg)
@@ -73,46 +80,80 @@ def generate_slices(
         json.dump(meta, fp, indent=2)
 
 
-# TODO pass data folder via env
-data_folder = "/Users/arnel/repos/thesisData/dataset"
-slidefile = f"{data_folder}/19,H,16747,_,01,1,0.mrxs"
-slide = openslide.open_slide(slidefile)
-print(f"Opened slide. Dims={slide.level_dimensions[0]}, Offset={get_slide_offset(slide)}")
+if __name__ == "__main__":
+    load_dotenv()
 
-# TODO pass via env or cli params
-annotations = load_annotations("annotations/checkpoint.2023-01-31_2258.geojson", get_slide_offset(slide))
-print(f"Loaded annotations: outsides={len(annotations.outsides)}, insides={len(annotations.insides)}")
+    class Args(argparse.Namespace):
+        slidefile: str
+        annotationsfile: str
+        level: int
+        tubule_threshold: int
+
+        num_train_images: int
+        num_test_images: int
+        train_test_split: int
+
+        folder_prefix: Optional[str]
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--slidefile", type=str, required=True)
+    parser.add_argument("--annotationsfile", type=str, required=True)
+    parser.add_argument("--level", type=int, required=True)
+    parser.add_argument("--tubule_threshold", type=int, required=True)
+
+    parser.add_argument("--num_train_images", type=int, default=0)
+    parser.add_argument("--num_test_images", type=int, default=0)
+    parser.add_argument("--train_test_split", type=int, default=0)
+    parser.add_argument("--folder_prefix", type=str)
+
+    args: Args = parser.parse_args()
+
+    pieces = args.slidefile.split("/")
+    data_folder = "/".join(pieces[:-1])
 
 
-# output_folder = f"data/slides/level{level}_overlap{tubule_threshold}/{purpose}"
-level = 1
-for purpose in ["train", "test"]:
-    if purpose == "train":
-        sampling = annotations.outsides[5:]
-    else:
-        sampling = annotations.outsides[:5]
+    print(f"Opening {abspath(os.path.expanduser(args.slidefile))}")
+    slide = openslide.open_slide(abspath(os.path.expanduser(args.slidefile)))
+    print(f"Opened slide. Dims={slide.level_dimensions[0]}, Offset={get_slide_offset(slide)}")
 
-    generate_slices(
-        slide=slide,
-        sampling_polygons=sampling,
-        annotations=annotations,
-        output_folder=f"data/test/level{level}_overlap60/{purpose}",
-        num_images=10,
-        level=level,
-        tubule_threshold=10,
-    )
+    annotations = load_annotations(args.annotationsfile, get_slide_offset(slide))
+    print(f"Loaded annotations: outsides={len(annotations.outsides)}, insides={len(annotations.insides)}")
 
-# width = 512
-# height = 512
-# wiggle = 0.8
-# NUM_IMAGES_TRAIN = 10
-# NUM_IMAGES_TEST = 5
-#
-#
-#
+    modes = []
+    if args.num_train_images > 0:
+        modes.append("train")
+    if args.num_test_images > 0:
+        modes.append("test")
 
-#
-# level = 1
-# # transform annotations
-# annotations = load_annotations("./checkpoint20230123_0116.geojson", get_offset(slide))
-# print(f"Loaded annotations: {len(annotations.outsides)}, {len(annotations.insides)}")
+
+    for purpose in modes:
+        if purpose == "train":
+            sampling = annotations.outsides[args.train_test_split:]
+            num_images = args.num_train_images
+
+        elif purpose == "test":
+            if args.train_test_split > 0:
+                sampling = annotations.outsides[:args.train_test_split]
+            else:
+                sampling = annotations.outsides
+
+            num_images = args.num_test_images
+
+        else:
+            print("no purpose")
+            continue
+
+
+        slide_name = args.slidefile.split("/")[-1]
+        prefix = f"{args.folder_prefix}/" if args.folder_prefix is not None else ""
+
+        generate_slices(
+            slide=slide,
+            sampling_polygons=sampling,
+            annotations=annotations,
+            output_folder=f"{os.environ.get('slides')}/{prefix}{slide_name}/level{args.level}_overlap{args.tubule_threshold}/{purpose}",
+            num_images=num_images,
+            level=args.level,
+            tubule_threshold=args.tubule_threshold,
+        )
+
