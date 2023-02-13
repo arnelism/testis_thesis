@@ -21,6 +21,7 @@ def generate_slices(
         slide: openslide.OpenSlide,
         sampling_polygons: List[Polygon],
         annotations: AnnotationsGroup,
+        region_handling: str,
         output_folder: str,
         num_images: int,
         level: int,
@@ -30,7 +31,8 @@ def generate_slices(
         height=512,
 ):
     print(f"\n\nLevel {level}, tubule_threshold {tubule_threshold}:")
-
+    print(f"Test regions: {annotations.regions}")
+    print(list(annotations.regions.values()))
     # prepare output dir
     if os.path.exists(output_folder):
         print(f"removing dir {output_folder}")
@@ -43,7 +45,16 @@ def generate_slices(
     }
     img_idx = 0
     while img_idx < num_images:
-        bounds = get_random_bounds(sampling_polygons, level, width, height, wiggle)
+        if region_handling == "contain":  # test data
+            bounds = get_random_bounds(sampling_polygons, level, width, height, wiggle, contain=list(annotations.regions.values()))
+        elif region_handling == "exclude":  # train data
+            bounds = get_random_bounds(sampling_polygons, level, width, height, wiggle, exclude=list(annotations.regions.values()))
+        else:
+            raise Exception(f"Missing/invalid value for region_handling ('{region_handling}')")
+
+        if bounds is None:
+            raise Exception("Missing Bounds")
+
         # TODO: maybe generate bounds truly randomly, from region, not from annotations?
         pics = get_slice(slide, level, bounds, annotations, debug=True)
         if pics is None:
@@ -88,10 +99,10 @@ if __name__ == "__main__":
         annotationsfile: str
         level: int
         tubule_threshold: int
+        test_regions: List[str]
 
         num_train_images: int
         num_test_images: int
-        train_test_split: int
 
         folder_prefix: Optional[str]
 
@@ -101,9 +112,10 @@ if __name__ == "__main__":
     parser.add_argument("--level", type=int, required=True)
     parser.add_argument("--tubule_threshold", type=int, required=True)
 
+    parser.add_argument("--test_regions", type=str, action="append")
+
     parser.add_argument("--num_train_images", type=int, default=0)
     parser.add_argument("--num_test_images", type=int, default=0)
-    parser.add_argument("--train_test_split", type=int, default=0)
     parser.add_argument("--folder_prefix", type=str)
 
     args: Args = parser.parse_args()
@@ -117,7 +129,11 @@ if __name__ == "__main__":
     print(f"Opened slide. Dims={slide.level_dimensions[0]}, Offset={get_slide_offset(slide)}")
 
     annotations = load_annotations(args.annotationsfile, get_slide_offset(slide))
+    if args.test_regions != "all" and args.test_regions is not None:
+        annotations.regions = {region_name: annotations.regions[region_name] for region_name in args.test_regions}
+
     print(f"Loaded annotations: outsides={len(annotations.outsides)}, insides={len(annotations.insides)}")
+    print(f"Using regions: {annotations.regions.keys()}")
 
     modes = []
     if args.num_train_images > 0:
@@ -125,18 +141,11 @@ if __name__ == "__main__":
     if args.num_test_images > 0:
         modes.append("test")
 
-
     for purpose in modes:
         if purpose == "train":
-            sampling = annotations.outsides[args.train_test_split:]
             num_images = args.num_train_images
 
         elif purpose == "test":
-            if args.train_test_split > 0:
-                sampling = annotations.outsides[:args.train_test_split]
-            else:
-                sampling = annotations.outsides
-
             num_images = args.num_test_images
 
         else:
@@ -149,11 +158,12 @@ if __name__ == "__main__":
 
         generate_slices(
             slide=slide,
-            sampling_polygons=sampling,
+            sampling_polygons=annotations.outsides,
             annotations=annotations,
             output_folder=f"{os.environ.get('slides')}/{prefix}{slide_name}/level{args.level}_overlap{args.tubule_threshold}/{purpose}",
             num_images=num_images,
             level=args.level,
             tubule_threshold=args.tubule_threshold,
+            region_handling="contain" if purpose == "test" else "exclude"
         )
 

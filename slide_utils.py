@@ -1,15 +1,15 @@
 # Helper functions for working with slides and annotations
-
+from __future__ import annotations
 from dataclasses import dataclass
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Optional
 
 import numpy as np
 import openslide
 import json
 
 from PIL import Image, ImageDraw
-
+import shapely
 
 def get_slide_offset(slide: openslide.OpenSlide) -> Tuple[int, int]:
     return (
@@ -29,6 +29,7 @@ Polygon = List[Coordinate]
 class AnnotationsGroup:
     outsides: List[Polygon]
     insides: List[Polygon]
+    regions: Dict[str, Polygon]
 
 
 @dataclass
@@ -50,6 +51,16 @@ class Bounds:
         scale = pow(2, self.zoom_level)
         return int(self.get_width() / scale), int(self.get_height() / scale)
 
+    def overlaps(self, another: Bounds) -> bool:
+        if another.topleft[X_COORD] <= self.topright[X_COORD] <= another.topright[X_COORD]:
+            if another.topleft[Y_COORD] <= self.bottomleft[Y_COORD] <= another.bottomleft[Y_COORD]:
+                return True
+
+        return False
+
+    def to_polygon(self) -> Polygon:
+        return [self.topleft, self.topright, self.bottomright, self.bottomleft]
+
 
 def load_annotations(filename: str, offset: Tuple[int, int], is_feature_collection=True) -> AnnotationsGroup:
     with open(filename, "r") as fp:
@@ -59,11 +70,13 @@ def load_annotations(filename: str, offset: Tuple[int, int], is_feature_collecti
 
     outsides = list(filter(lambda f: f["properties"]["classification"]["name"] == "tubule outside", features))
     insides = list(filter(lambda f: f["properties"]["classification"]["name"] == "tubule inside", features))
+    regions = list(filter(lambda f: f["properties"]["classification"]["name"] == "test region", features))
 
     print(f"Applying offset {offset}")
     return AnnotationsGroup(
         outsides=[apply_offset(get_annotation(ann), offset) for ann in outsides],
         insides=[apply_offset(get_annotation(ann), offset) for ann in insides],
+        regions={ann["properties"]["name"]: apply_offset(get_annotation(ann), offset) for ann in regions},
     )
 
 
@@ -87,37 +100,79 @@ def apply_offset(ann: Polygon, offset: Tuple[int, int]) -> Polygon:
     return answer
 
 
-def get_random_bounds(annotations: List[Polygon], level: int, width: int, height: int, wiggle: float) -> Bounds:
-    # pick random annotation
-    poly = annotations[random.randint(0, len(annotations) - 1)]
+def get_random_bounds(
+        annotations: List[Polygon],
+        level: int,
+        width: int,
+        height: int,
+        wiggle: float,
+        contain: Optional[List[Polygon]] = None,
+        exclude: Optional[List[Polygon]] = None,
+        attempts: int = 1000
+) -> Bounds:
+    for i in range (attempts):
+        # pick random annotation
+        poly = annotations[random.randint(0, len(annotations) - 1)]
 
-    # get a random point of the polygon boundary (use random vertice)
-    poly_pt = poly[random.randint(0, len(poly) - 1)]
+        # get a random point of the polygon boundary (use random vertice)
+        poly_pt = poly[random.randint(0, len(poly) - 1)]
 
-    # convert desired output dims to base (level0) image dims
-    # The larger the zoom level (the more image area is covered)
-    zoom = pow(2, level)
-    source_width = width * zoom
-    source_height = height * zoom
+        # convert desired output dims to base (level0) image dims
+        # The larger the zoom level (the more image area is covered)
+        zoom = pow(2, level)
+        source_width = width * zoom
+        source_height = height * zoom
 
-    # place the random point in the middle of the slide
-    x = poly_pt[X_COORD] - int(source_width / 2)
-    y = poly_pt[Y_COORD] - int(source_height / 2)
+        # place the random point in the middle of the slide
+        x = poly_pt[X_COORD] - int(source_width / 2)
+        y = poly_pt[Y_COORD] - int(source_height / 2)
 
-    # move the slide around so that it's not always in the dead centre
-    wiggle_room_x = int(source_width * wiggle)
-    wiggle_room_y = int(source_height * wiggle)
-    x = x + random.randint(-wiggle_room_x, wiggle_room_x)
-    y = y + random.randint(-wiggle_room_y, wiggle_room_y)
+        # move the slide around so that it's not always in the dead centre
+        wiggle_room_x = int(source_width * wiggle)
+        wiggle_room_y = int(source_height * wiggle)
+        x = x + random.randint(-wiggle_room_x, wiggle_room_x)
+        y = y + random.randint(-wiggle_room_y, wiggle_room_y)
 
-    return Bounds(
-        topleft=(x, y),
-        topright=(x + source_width, y),
-        bottomleft=(x, y + source_height),
-        bottomright=(x + source_width, y + source_height),
-        zoom_level=level,
-    )
+        candidate = Bounds(
+            topleft=(x, y),
+            topright=(x + source_width, y),
+            bottomleft=(x, y + source_height),
+            bottomright=(x + source_width, y + source_height),
+            zoom_level=level,
+        )
 
+        if contain is not None:
+            if not is_contained_in_any(candidate, contain):
+                continue
+
+        if exclude is not None:
+            if intercepts_any(candidate, exclude):
+                continue
+
+        return candidate
+
+    print("out of tries")
+    return None
+
+
+def is_contained_in_any(bounds: Bounds, polygons: List[Polygon]):
+    test_shape = shapely.Polygon(bounds.to_polygon())
+    for poly in polygons:
+        region = shapely.Polygon(poly)
+        if region.contains(test_shape):
+            return True
+
+    return False
+
+
+def intercepts_any(bounds: Bounds, polygons: List[Polygon]):
+    test_shape = shapely.Polygon(bounds.to_polygon())
+    for poly in polygons:
+        region = shapely.Polygon(poly)
+        if region.intersects(test_shape):
+            return True
+
+    return False
 
 def get_slice(slide: openslide.OpenSlide, level: int, bounds: Bounds, annotations: AnnotationsGroup, debug=False):
     # img_pure = slide.read_region(location=bounds.topleft, level=level, size=bounds.get_size())

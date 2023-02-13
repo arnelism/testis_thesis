@@ -4,19 +4,26 @@ import random
 from typing import List, Tuple
 
 from PIL import Image, ImageOps
-from PIL.Image import Transpose
+
+FLIP_LEFT_RIGHT = 0
+FLIP_TOP_BOTTOM = 1
+ROTATE_90 = 2
+ROTATE_180 = 3
+ROTATE_270 = 4
+TRANSPOSE = 5
+TRANSVERSE = 6
 
 
 def rotate90(image: Image.Image):
-    return image.transpose(Transpose.ROTATE_90)
+    return image.transpose(ROTATE_90)
 
 
 def rotate180(image: Image.Image):
-    return image.transpose(Transpose.ROTATE_180)
+    return image.transpose(ROTATE_180)
 
 
 def rotate270(image: Image.Image):
-    return image.transpose(Transpose.ROTATE_270)
+    return image.transpose(ROTATE_270)
 
 
 def noop(image: Image.Image):
