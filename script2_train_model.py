@@ -119,12 +119,12 @@ def run_pipeline(cfg: Args):
 
     # TODO convert to tf image loader!
     train_images, train_masks = load_dataset(
-        get_dataset_path(cfg.train_slidefile, level, overlap, "train"),
+        get_dataset_path(cfg, "train"),
         color_mode,
         cfg.train_size
     )
     test_images, test_masks = load_dataset(
-        get_dataset_path(cfg.test_slidefile, level, overlap, "test"),
+        get_dataset_path(cfg, "test"),
         color_mode,
         cfg.test_size
     )
