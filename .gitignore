@@ -9,6 +9,7 @@ env_thesis/
 tmp/
 
 __tmp*
+overrides.env
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
