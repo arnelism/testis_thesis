@@ -94,76 +94,58 @@ def generate_slices(
 if __name__ == "__main__":
     load_env()
 
-    class Args(argparse.Namespace):
-        slidefile: str
-        annotationsfile: str
-        level: int
-        tubule_threshold: int
-        test_regions: List[str]
+    slide_name = os.environ['slide_name']
+    slidefile = os.environ[f"slidefile_{slide_name}"]
+    annotationsfile = os.environ[f"annotations_{slide_name}"]
+    test_regions = os.environ.get("test_regions")
 
-        num_train_images: int
-        num_test_images: int
+    level = int(os.environ["level"])
+    tubule_threshold = int(os.environ["tubule_threshold"])
+    num_train_images = int(os.environ["num_train_images"])
+    num_test_images = int(os.environ["num_test_images"])
 
-        folder_prefix: Optional[str]
+    folder_prefix = os.environ.get("folder_prefix")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--slidefile", type=str, required=True)
-    parser.add_argument("--annotationsfile", type=str, required=True)
-    parser.add_argument("--level", type=int, required=True)
-    parser.add_argument("--tubule_threshold", type=int, required=True)
-
-    parser.add_argument("--test_regions", type=str, action="append")
-
-    parser.add_argument("--num_train_images", type=int, default=0)
-    parser.add_argument("--num_test_images", type=int, default=0)
-    parser.add_argument("--folder_prefix", type=str)
-
-    args: Args = parser.parse_args()
-
-    pieces = args.slidefile.split("/")
-    data_folder = "/".join(pieces[:-1])
-
-
-    print(f"Opening {abspath(os.path.expanduser(args.slidefile))}")
-    slide = openslide.open_slide(abspath(os.path.expanduser(args.slidefile)))
+    print(f"Opening {abspath(os.path.expanduser(f'{slidefile}'))}")
+    slide = openslide.open_slide(abspath(os.path.expanduser(slidefile)))
     print(f"Opened slide. Dims={slide.level_dimensions[0]}, Offset={get_slide_offset(slide)}")
 
-    annotations = load_annotations(args.annotationsfile, get_slide_offset(slide))
-    if args.test_regions != "all" and args.test_regions is not None:
-        annotations.regions = {region_name: annotations.regions[region_name] for region_name in args.test_regions}
+    annotations = load_annotations(annotationsfile, get_slide_offset(slide))
+    if test_regions != "all" and test_regions is not None:
+        annotations.regions = {region_name.strip(): annotations.regions[region_name.strip()] for region_name in test_regions.split(",")}
 
     print(f"Loaded annotations: outsides={len(annotations.outsides)}, insides={len(annotations.insides)}")
     print(f"Using regions: {annotations.regions.keys()}")
 
     modes = []
-    if args.num_train_images > 0:
+    if num_train_images > 0:
         modes.append("train")
-    if args.num_test_images > 0:
+    if num_test_images > 0:
         modes.append("test")
 
     for purpose in modes:
         if purpose == "train":
-            num_images = args.num_train_images
+            num_images = num_train_images
 
         elif purpose == "test":
-            num_images = args.num_test_images
+            num_images = num_test_images
 
         else:
             print("no purpose")
             continue
 
 
-        slide_name = args.slidefile.split("/")[-1]
-        prefix = f"{args.folder_prefix}/" if args.folder_prefix is not None else ""
+        # slide_name = args.slidefile.split("/")[-1]
+        prefix = f"{folder_prefix}/" if folder_prefix is not None else ""
 
         generate_slices(
             slide=slide,
             sampling_polygons=annotations.outsides,
             annotations=annotations,
-            output_folder=f"{os.environ.get('slides')}/{prefix}{slide_name}/level{args.level}_overlap{args.tubule_threshold}/{purpose}",
+            output_folder=f"{os.environ.get('slides')}/{prefix}{slide_name}/level{level}_overlap{tubule_threshold}/{purpose}",
             num_images=num_images,
-            level=args.level,
-            tubule_threshold=args.tubule_threshold,
+            level=level,
+            tubule_threshold=tubule_threshold,
             region_handling="contain" if purpose == "test" else "exclude"
         )
 
