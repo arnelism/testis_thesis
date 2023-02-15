@@ -4,6 +4,8 @@ dataset
 data
 output
 work
+dataset
+env_thesis
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
