@@ -10,9 +10,9 @@ import statistics
 from typing import List, Optional
 
 import openslide
-from dotenv import load_dotenv
 
 from augmentations import apply_random_augmentation
+from settings import load_env
 from slide_utils import load_annotations, get_random_bounds, get_slice, get_annotated_area_ratio, print_progress, \
     AnnotationsGroup, get_slide_offset, Polygon
 from os.path import abspath
@@ -92,7 +92,7 @@ def generate_slices(
 
 
 if __name__ == "__main__":
-    load_dotenv()
+    load_env()
 
     class Args(argparse.Namespace):
         slidefile: str

@@ -6,7 +6,6 @@
 # Runs for a long time. Should be called via slurm_train.sh
 
 import argparse
-from dotenv import load_dotenv
 
 from segmentation_models import Unet
 from segmentation_models.losses import categorical_crossentropy
@@ -18,6 +17,8 @@ import tensorflow as tf
 from datetime import datetime
 import wandb
 from wandb.keras import WandbCallback
+
+from settings import load_env
 
 
 class Args:
@@ -191,7 +192,7 @@ def run_pipeline(cfg: Args):
 
 
 if __name__ == "__main__":
-    load_dotenv()
+    load_env()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--level", type=int)

@@ -1,11 +1,14 @@
 .DS_Store
 .idea
-dataset
-data
-output
-work
-wandb
-env_thesis
+dataset/
+data/
+output/
+work/
+wandb/
+env_thesis/
+tmp/
+
+__tmp*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
