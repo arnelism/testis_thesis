@@ -14,4 +14,6 @@ module load cuda
 module load cudnn
 source env_thesis/bin/activate
 
+echo "Environment initialized. Running training script"
+
 python script2_train_model.py
