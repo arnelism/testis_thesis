@@ -5,7 +5,8 @@
 
 # Runs for a long time. Should be called via slurm_train.sh
 
-import argparse
+import dataclasses
+from typing import Optional
 
 from segmentation_models import Unet
 from segmentation_models.losses import categorical_crossentropy
@@ -21,6 +22,8 @@ from wandb.keras import WandbCallback
 from settings import load_env
 
 
+
+@dataclasses.dataclass
 class Args:
     level: int
     overlap: int
@@ -35,6 +38,8 @@ class Args:
     enable_wb: bool
     train_size: int
     test_size: int
+
+    name: Optional[str]
 
 
 # noinspection PyTypeChecker
@@ -68,7 +73,7 @@ def load_dataset(folder, color_mode, max_size=-1):
     print(f"Loading dataset {folder}")
     i = 0
     for img in os.listdir(f"{folder}"):
-        if max_size != -1 and max_size <= i:
+        if max_size is not None and max_size <= i:
             break
 
         if img.endswith("_orig.png"):
@@ -85,16 +90,22 @@ def load_dataset(folder, color_mode, max_size=-1):
             if i % 100 == 0:
                 print(f"\t{i}")
 
+    print("")
     images = np.array(images)
     masks = np.array(masks)
     return images, masks
 
 
 def create_model(color_mode, backbone="resnet34"):
-    num_channels = 1 if color_mode == "grayscale" else 3
-    model = Unet(backbone, encoder_weights=None, input_shape=(512, 512, num_channels), classes=3)
-    model.compile('Adam', loss=categorical_crossentropy, metrics=[iou_score, f1_score])
-    return model
+    print(f"Creating model (color_mode={color_mode}, backbone={backbone})")
+    try:
+        num_channels = 1 if color_mode == "grayscale" else 3
+        model = Unet(backbone, encoder_weights=None, input_shape=(512, 512, num_channels), classes=3)
+        model.compile('Adam', loss=categorical_crossentropy, metrics=[iou_score, f1_score])
+        return model
+    except Exception as e:
+        print("Error creating model")
+        raise e
 
 
 def get_dataset_path(cfg: Args, mode: str) -> str:
@@ -106,7 +117,11 @@ def get_dataset_path(cfg: Args, mode: str) -> str:
     slidefile = cfg.train_slidefile if mode == "train" else cfg.test_slidefile
     full_slidefile = os.environ[f"slidefile_{slidefile}"]
 
-    return f"{os.environ['slides']}/{mid}{full_slidefile}/level{args.level}_overlap{args.overlap}/{mode}"
+    return f"{os.environ['slides']}/{mid}{slidefile}/level{args.level}_overlap{args.overlap}/{mode}"
+
+
+def get_date_str(now=datetime.now()):
+    return now.isoformat("_", "minutes").replace(":","")
 
 
 def run_pipeline(cfg: Args):
@@ -132,10 +147,14 @@ def run_pipeline(cfg: Args):
     print(f"Loaded dataset (level={level}, overlap={overlap})")
     print((train_images.shape, train_masks.shape, test_images.shape, test_masks.shape))
 
-    model_name = f"{cfg.train_slidefile}{cfg.test_slidefile}_level{level}_overlap{overlap}_col{color_mode}_{backbone}_epochs{epochs}"
+    model_name = f"{cfg.train_slidefile}{cfg.test_slidefile}_level{level}_overlap{overlap}_{color_mode}_{get_date_str()}"
+    if args.name is not None:
+        model_name = f"{args.name}_{model_name}"
+
     model_path = f"{os.environ['models']}/{model_name}"
     model = create_model(color_mode, backbone)
 
+    print("Configuring callbacks")
     callbacks = []
 
     callbacks.append(
@@ -147,11 +166,11 @@ def run_pipeline(cfg: Args):
         )
     )
 
-    now = datetime.now().strftime("%Y-%m-%d_%H%M")
-    logs_folder = os.environ["train_logs"]
+    log_dir = f"{os.environ['train_logs']}/{model_name}/{get_date_str()}"
+    print(f"Saving logs to {log_dir}")
     callbacks.append(
         tf.keras.callbacks.TensorBoard(
-            log_dir=f"{logs_folder}/{model_name}/{now}"
+            log_dir=log_dir
         )
     )
 
@@ -171,14 +190,18 @@ def run_pipeline(cfg: Args):
             WandbCallback()
         )
 
-    model.fit(
-        x=train_images,
-        y=train_masks,
-        validation_data=(test_images, test_masks),
-        epochs=epochs,
-        batch_size=batch_size,
-        callbacks=callbacks
-    )
+    print(model.summary())
+
+    if epochs > 0:
+        model.fit(
+            x=train_images,
+            y=train_masks,
+            validation_data=(test_images, test_masks),
+            epochs=epochs,
+            batch_size=batch_size,
+            callbacks=callbacks
+        )
+
     model.save_weights(f"{model_path}/final.ckpt")
 
     if cfg.enable_wb:
@@ -194,25 +217,23 @@ def run_pipeline(cfg: Args):
 if __name__ == "__main__":
     load_env()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--level", type=int)
-    parser.add_argument("--overlap", type=int)
-    parser.add_argument("--color_mode")
-    parser.add_argument("--backbone", default="resnet34")
-    parser.add_argument("--epochs", default=100, type=int)
-    parser.add_argument("--batch_size", default=64, type=int)
+    args = Args(
+        level=int(os.environ['level']),
+        overlap=int(os.environ['overlap']),
+        color_mode=os.environ['color_mode'],
+        backbone=os.environ['backbone'],
+        epochs=int(os.environ['train_epochs']),
+        batch_size=int(os.environ['batch_size']),
 
-    parser.add_argument("--train_slidefile", type=str)
-    parser.add_argument("--test_slidefile", type=str)
+        train_slidefile=os.environ['train_slidefile'],
+        test_slidefile=os.environ['test_slidefile'],
+        enable_wb=bool(os.environ.get('enable_wb') == 'true'),
 
-    parser.add_argument('--enable_wb', action="store_true")
+        train_size=int(os.environ.get('train_size')) if os.environ.get('train_size') is not None else None,
+        test_size=int(os.environ.get('test_size')) if os.environ.get('test_size') is not None else None,
 
-    parser.add_argument('--train_size', type=int, default=-1)
-    parser.add_argument('--test_size', type=int, default=-1)
-
-    # noinspection PyTypeChecker
-    args: Args = parser.parse_args()
-
+        name=os.environ.get('name'),
+    )
 
     print(f"\n\nRunning pipeline: {args}")
 
