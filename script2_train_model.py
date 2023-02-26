@@ -21,6 +21,7 @@ from wandb.keras import WandbCallback
 
 from settings import load_env
 
+from utils.image_loader import get_image_loader
 
 
 @dataclasses.dataclass
@@ -133,20 +134,12 @@ def run_pipeline(cfg: Args):
     batch_size = cfg.batch_size
 
 
-    # TODO convert to tf image loader!
-    train_images, train_masks = load_dataset(
-        get_dataset_path(cfg, "train"),
-        color_mode,
-        cfg.train_size
-    )
-    test_images, test_masks = load_dataset(
-        get_dataset_path(cfg, "test"),
-        color_mode,
-        cfg.test_size
-    )
+    # create data loader
+    train_data = get_image_loader(get_dataset_path(cfg, "train"), cfg.batch_size)
+    test_data = get_image_loader(get_dataset_path(cfg, "test"), cfg.batch_size)
     print(f"Loaded dataset (level={level}, overlap={overlap})")
-    print((train_images.shape, train_masks.shape, test_images.shape, test_masks.shape))
 
+    # create model
     model_name = f"{cfg.train_slidefile}{cfg.test_slidefile}_level{level}_overlap{overlap}_{color_mode}_{get_date_str()}"
     if args.name is not None:
         model_name = f"{args.name}_{model_name}"
@@ -154,9 +147,10 @@ def run_pipeline(cfg: Args):
     model_path = f"{os.environ['models']}/{model_name}"
     model = create_model(color_mode, backbone)
 
-    print("Configuring callbacks")
+    # configure callbacks
     callbacks = []
 
+    # ... save weights for best model
     callbacks.append(
         tf.keras.callbacks.ModelCheckpoint(
             filepath=f"{model_path}/checkpoint.ckpt",
@@ -166,6 +160,7 @@ def run_pipeline(cfg: Args):
         )
     )
 
+    # ... save tensorboard logs
     log_dir = f"{os.environ['train_logs']}/{model_name}/{get_date_str()}"
     print(f"Saving logs to {log_dir}")
     callbacks.append(
@@ -174,6 +169,7 @@ def run_pipeline(cfg: Args):
         )
     )
 
+    # ... save wb logs
     if cfg.enable_wb:
         config = {
             "generation": 2,
@@ -192,23 +188,23 @@ def run_pipeline(cfg: Args):
 
     print(model.summary())
 
+    # train the model
     if epochs > 0:
         model.fit(
-            x=train_images,
-            y=train_masks,
-            validation_data=(test_images, test_masks),
+            train_data,
+            validation_data=test_data,
             epochs=epochs,
             batch_size=batch_size,
             callbacks=callbacks
         )
 
+    # wrap-up
     model.save_weights(f"{model_path}/final.ckpt")
 
     if cfg.enable_wb:
         wandb.finish()
 
     print("\nFINISHED TRAINING MODEL\n")
-    return model, train_images, train_masks, test_images, test_masks
 
 
 ########################################

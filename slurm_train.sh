@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition gpu
 #SBATCH --time=08:00:00
-#SBATCH --gres=gpu:a100-80g:1
+#SBATCH --gres=gpu:a100-40g:1
 #SBATCH --mem 64000
 #SBATCH --job-name train_testis_model
 #SBATCH --output work/slurm_logs/%J_train_log.txt
