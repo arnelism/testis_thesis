@@ -38,20 +38,32 @@ class Bounds:
     topright: Coordinate
     bottomleft: Coordinate
     bottomright: Coordinate
+    # xxx zoom level is stored here because some bounds calculations depend on it and one cannot provide it at calltime
     zoom_level: int
 
-
     def get_width(self) -> int:
+        """
+        Get width of the bounds in zoom level 0
+        """
         return self.topright[X_COORD] - self.topleft[X_COORD]
 
     def get_height(self) -> int:
+        """
+        Get height of the bounds in zoom level 0
+        """
         return self.bottomleft[Y_COORD] - self.topleft[Y_COORD]
 
     def get_size(self) -> (int, int):
+        """
+        Get width and height of the bounds in configured zoom level
+        """
         scale = pow(2, self.zoom_level)
         return int(self.get_width() / scale), int(self.get_height() / scale)
 
     def overlaps(self, another: Bounds) -> bool:
+        """
+        Whether or not two Bounds overlap (should convert to shapely)
+        """
         if another.topleft[X_COORD] <= self.topright[X_COORD] <= another.topright[X_COORD]:
             if another.topleft[Y_COORD] <= self.bottomleft[Y_COORD] <= another.bottomleft[Y_COORD]:
                 return True
@@ -59,6 +71,9 @@ class Bounds:
         return False
 
     def to_polygon(self) -> Polygon:
+        """
+        Convert to polygon (array or coordinates) denoting corners of the bounds
+        """
         return [self.topleft, self.topright, self.bottomright, self.bottomleft]
 
 
@@ -155,6 +170,43 @@ def get_random_bounds(
     return None
 
 
+def get_polygon_bounds(polygon: Polygon, zoom: int) -> Bounds:
+    """
+    Returns bounding box of a polygon (polygon precisely fits into that box)
+    """
+    min_x = min([x for (x,y) in polygon])
+    min_y = min([y for (x,y) in polygon])
+    max_x = max([x for (x,y) in polygon])
+    max_y = max([y for (x,y) in polygon])
+
+    return Bounds(
+        topleft=(min_x, min_y),
+        topright=(max_x, min_y),
+        bottomleft=(min_x, max_y),
+        bottomright=(max_x, max_y),
+        zoom_level=zoom
+    )
+
+
+def get_union_bounds(polygons: List[Polygon], zoom: int) -> Bounds:
+    """
+    Returns a bounding box containing all the polygons (full annotated area of a slide)
+    """
+    bounds_list = [get_polygon_bounds(p, zoom) for p in polygons]
+    min_x = min([b.topleft[X_COORD] for b in bounds_list])
+    min_y = min([b.topleft[Y_COORD] for b in bounds_list])
+    max_x = max([b.bottomright[X_COORD] for b in bounds_list])
+    max_y = max([b.bottomright[Y_COORD] for b in bounds_list])
+
+    return Bounds(
+        topleft=(min_x, min_y),
+        topright=(max_x, min_y),
+        bottomleft=(min_x, max_y),
+        bottomright=(max_x, max_y),
+        zoom_level=zoom
+    )
+
+
 def is_contained_in_any(bounds: Bounds, polygons: List[Polygon]):
     test_shape = shapely.Polygon(bounds.to_polygon())
     for poly in polygons:
@@ -173,6 +225,7 @@ def intercepts_any(bounds: Bounds, polygons: List[Polygon]):
             return True
 
     return False
+
 
 def get_slice(slide: openslide.OpenSlide, level: int, bounds: Bounds, annotations: AnnotationsGroup, debug=False):
     # img_pure = slide.read_region(location=bounds.topleft, level=level, size=bounds.get_size())

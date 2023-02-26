@@ -9,6 +9,7 @@ env_thesis/
 tmp/
 
 __tmp*
+__images/
 overrides.env
 
 # Byte-compiled / optimized / DLL files
