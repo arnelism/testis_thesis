@@ -1,8 +1,10 @@
 import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
 
+
 def load_image(file_path):
-    return tf.io.decode_png(tf.io.read_file(file_path), channels=3)
+    input_image = tf.io.decode_png(tf.io.read_file(file_path), channels=3)
+    return tf.cast(input_image, tf.float32) / 255.0
 
 
 def get_seg_filename(file_path):
