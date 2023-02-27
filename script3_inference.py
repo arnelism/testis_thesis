@@ -162,7 +162,7 @@ def generate_outcomes(
         save_output_images(target, preds, filenames)
 
     #Generate mosaic images
-    seg2d = build_mosaic_2d_array(images, filenames)
+    seg2d = build_mosaic_2d_array(preds, filenames)
     basename = f"output/{model_name}/composite"
     print(f"Generating mosaic images: {basename}")
 
