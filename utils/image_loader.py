@@ -3,7 +3,9 @@ from tensorflow.python.data import AUTOTUNE
 
 
 def load_image(file_path):
-    return tf.io.decode_png(tf.io.read_file(file_path), channels=3)
+    image = tf.io.decode_png(tf.io.read_file(file_path), channels=3)
+    # normalize to 0...1 range
+    return tf.cast(image, tf.float32)/255
 
 
 def get_seg_filename(file_path):
@@ -15,6 +17,7 @@ def load_seg_image(file_path):
 
     # rewrite blue channel based on alpha channel
     # max blue when alpha==0(transparent img)
+    # also normalize to 0...1 range (xxx why did I use green=128 when generating train data?)
     red, green, blue, alpha = tf.unstack(image, axis=-1)
     return tf.stack ([
         tf.cast(red, tf.float32)/255,
