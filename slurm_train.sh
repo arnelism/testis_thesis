@@ -2,7 +2,7 @@
 #SBATCH --partition gpu
 #SBATCH --time=08:00:00
 #SBATCH --gres=gpu:a100-40g:1
-#SBATCH --mem 64000
+#SBATCH --mem 32000
 #SBATCH --job-name train_testis_model
 #SBATCH --output work/slurm_logs/%J_train_log.txt
 #SBATCH --mail-type=ALL
