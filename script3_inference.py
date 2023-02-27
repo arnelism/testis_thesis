@@ -8,6 +8,9 @@
 # It's the main output of the project once it works well
 
 import tensorflow as tf
+
+from settings import load_env
+
 if tf.test.is_gpu_available():
     print("GPU is available, ready to go")
 else:
@@ -41,7 +44,8 @@ def load_mosaic(level: int, colmode: Literal["color", "grayscale"]) -> Tuple[Lis
     """
     loads all mosaic images in a folder to an unsorted 1d-array.
     """
-    folder = f"slides/inference/lvl{level}"
+    os.environ['workdir']
+    folder = f"{os.environ['workdir']}/inference/lvl{level}"
     path_length = len(folder)+1
     pathnames: List[str] = glob.glob(f"{folder}/row*_col*_orig.png")
     filenames = [f[path_length:] for f in pathnames]
@@ -118,7 +122,8 @@ def generate_outcomes(filenames: List[str], images: List[np.ndarray], level: int
 
     print("\nPredicting segmentation slices\n")
     model = create_model(color_mode)
-    model.load_weights(f"models/level{level}_overlap{overlap}_col{color_mode}_resnet34_epochs100/checkpoint.ckpt")
+    os.environ.get('models')
+    model.load_weights(f"{os.environ['models']}/{os.environ['modelname']}/checkpoint.ckpt")
     preds = model.predict(np.array(images))
 
 
@@ -177,21 +182,24 @@ IDX_IMAGES = 0
 IDX_FILENAMES = 1
 
 
-print("Loading source images")
-images_1_gray = load_mosaic(1, "grayscale")
-images_1_color = load_mosaic(1, "color")
-# images_2_color = load_mosaic(2, "color")
-# images_2_gray = load_mosaic(2, "grayscale")
+if __name__ == "__main__":
+    load_env()
 
-generate_outcomes(filenames=images_1_color[IDX_FILENAMES], images=images_1_color[IDX_IMAGES], level=1, color_mode="color", overlap=10)
-generate_outcomes(filenames=images_1_gray[IDX_FILENAMES], images=images_1_gray[IDX_IMAGES], level=1, color_mode="grayscale", overlap=10)
+    print("Loading source images")
+    images_1_color = load_mosaic(1, "color")
+    images_1_gray = load_mosaic(1, "grayscale")
+    # images_2_color = load_mosaic(2, "color")
+    # images_2_gray = load_mosaic(2, "grayscale")
 
-# generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=50)
-# generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=30)
-# generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=10)
-#
-# generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=50)
-# generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=30)
-# generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=10)
+    generate_outcomes(filenames=images_1_color[IDX_FILENAMES], images=images_1_color[IDX_IMAGES], level=1, color_mode="color", overlap=10)
+    generate_outcomes(filenames=images_1_gray[IDX_FILENAMES], images=images_1_gray[IDX_IMAGES], level=1, color_mode="grayscale", overlap=10)
 
-print("Script finished")
+    # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=50)
+    # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=30)
+    # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=10)
+    #
+    # generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=50)
+    # generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=30)
+    # generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=10)
+
+    print("Script finished")
