@@ -7,24 +7,14 @@
 
 # It's the main output of the project once it works well
 
-import tensorflow as tf
-
 from settings import load_env
-
-if tf.test.is_gpu_available():
-    print("GPU is available, ready to go")
-else:
-    raise Exception("GPU not found. Cannot continue")
+from utils.model import create_model
 
 from typing import List, Literal, Tuple
 from PIL import ImageDraw, Image
 import numpy as np
 import os
 import glob
-from segmentation_models import Unet
-from segmentation_models.losses import categorical_crossentropy
-from segmentation_models.metrics import iou_score, f1_score
-from functools import cmp_to_key
 import shutil
 
 
@@ -37,25 +27,72 @@ def load_image(filename: str, color_mode: Literal["color", "grayscale"]) -> np.n
         img = np.array(img)
         img = img[..., 0:-1] # remove alpha layer
 
-    return img
+    return img / 255.0
 
 
-def load_mosaic(level: int, colmode: Literal["color", "grayscale"]) -> Tuple[List[np.ndarray], List[str]]:
+def load_mosaic_images(level: int, color_mode: Literal["color", "grayscale"]) -> Tuple[List[np.ndarray], List[str]]:
     """
     loads all mosaic images in a folder to an unsorted 1d-array.
     """
-    os.environ['workdir']
     folder = f"{os.environ['workdir']}/inference/lvl{level}"
     path_length = len(folder)+1
     pathnames: List[str] = glob.glob(f"{folder}/row*_col*_orig.png")
     filenames = [f[path_length:] for f in pathnames]
 
-    images = [load_image(f"{folder}/{f}", colmode) for f in filenames]
+    images = [load_image(f"{folder}/{f}", color_mode) for f in filenames]
 
     return images, filenames
 
 
-def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=False) -> Image:
+def save_output_images(target_dir: str, images: List[np.ndarray], filenames: List[str]):
+    """
+    Saves list of images (in ndarray form) to disk, using filenames as a naming guide (replaces _orig with _seg)
+    Image values are supposed to be normalized (in 0...1 range)
+    """
+    for i in range(len(images)):
+        img = Image.fromarray((images[i] * 255).astype('uint8'))
+        fname = filenames[i].replace("orig", "seg")
+        img.save(f"{target_dir}/{fname}")
+        print(".", end="")
+        if (i + 1) % 100 == 0:
+            print("")
+    print("")
+
+
+def get_row_id(filename: str) -> int:
+    return int(filename.split("_")[0][3:])
+
+
+def get_col_id(filename):
+    return int(filename.split("_")[1][3:])
+
+
+def build_mosaic_2d_array(images: List[np.ndarray], filenames: List[str]) -> List[List[Image.Image]]:
+
+    # sort images based on custom comparator in filenames (e.g. row7_col9_orig.png). row by row, col by col
+    dtype = [('filename', str, 32), ('row', int), ('col', int)]
+    files = np.array(
+        [(f, get_row_id(f), get_col_id(f)) for f in filenames],
+        dtype=dtype
+    )
+    indices = np.argsort(files, order=["row","col"])
+
+    arr2d: List[List[Image.Image]] = []
+    last_row = -1
+    for idx in indices:
+        filename, row, col = files[idx]
+
+        if row > last_row:
+            last_row = row
+            arr2d.append([])
+
+        img = Image.fromarray((images[idx]*255).astype('uint8'))
+        arr2d[row].append(img)
+
+    return arr2d
+
+
+def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=False) -> Image.Image:
     """
     Joins 2d-array of images into one large image.
     """
@@ -91,91 +128,60 @@ def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=Fals
     return output
 
 
-def create_model(color_mode, backbone="resnet34"):
-    num_channels = 1 if color_mode=="grayscale" else 3
-    model = Unet(backbone, encoder_weights=None, input_shape=(512, 512, num_channels), classes=3)
-    model.compile('Adam', loss=categorical_crossentropy, metrics=[iou_score, f1_score])
-    return model
+def prepare_directory(path: str):
+    print(f"Output directory: {path}")
+
+    if os.path.exists(path):
+        print("Output directory exists, removing it")
+        shutil.rmtree(path)
+
+    os.makedirs(path)
 
 
-def get_row_col(filename):
-    bits = filename.split("_")
-    return (int(bits[0][3:]), int(bits[1][3:]))
-
-
-def mosaic_comparator(a, b):
-    if a[:3] == "row" and b[:3] == "row":
-        first = get_row_col(a)
-        second = get_row_col(b)
-        if first[0]==second[0]:
-            return first[1]-second[1]
-        return first[0]-second[0]
-    raise Exception(f"bad filenames: {(a, b)}")
-
-
-def generate_outcomes(filenames: List[str], images: List[np.ndarray], level: int, color_mode: str, overlap: int):
-    print(f"\nGenerating outcomes: {level}, {color_mode}, {overlap}. ({len(filenames)} images) \n")
-
+def generate_outcomes(
+        filenames: List[str],
+        images: List[np.ndarray],
+        color_mode: str,
+        model_name: str,
+        save_pieces: bool,
+        save_composite: bool,
+):
+    print(f"\nGenerating outcomes:  {color_mode}. ({len(filenames)} images) \n")
     if len(images) != len(filenames):
         raise Exception(f"Nr filenames and images are different: {len(filenames)}, {len(images)}")
 
-
     print("\nPredicting segmentation slices\n")
     model = create_model(color_mode)
-    os.environ.get('models')
-    model.load_weights(f"{os.environ['models']}/{os.environ['modelname']}/checkpoint.ckpt")
+    model.load_weights(f"{os.environ['models']}/{model_name}/checkpoint.ckpt")
     preds = model.predict(np.array(images))
 
+    print("Saving segmentation slices")
+    if save_pieces:
+        target = f"output/{model_name}/pieces"
+        prepare_directory(target)
+        save_output_images(target, preds, filenames)
 
-    target = f"output/lvl{level}_overlap{overlap}_col{color_mode}_out"
-    print(f"\nSaving segmentation pieces to dir '{target}'\n")
-
-    if os.path.exists(target):
-        print("Target dir exists, removing it")
-        shutil.rmtree(target)
-
-    os.makedirs(target)
-
-    for i in range(len(preds)):
-        img = Image.fromarray((preds[i]*255).astype('uint8'))
-        fname = filenames[i].replace("orig", "seg")
-        img.save(f"{target}/{fname}")
-        print(".", end="")
-        if (i + 1) % 100 == 0:
-            print("")
-
-
-    # load segmentation pieces into 2d-array
-    print("\nLoading segmentation pieces\n")
-    sorted_pics = sorted(filenames, key=cmp_to_key(mosaic_comparator))
-    seg2d = []
-    last_row = -1
-    for fname in sorted_pics:
-        row, col = get_row_col(fname)
-        if row > last_row:
-            last_row = row
-            seg2d.append([])
-
-        arr = seg2d[row]
-        fname = fname.replace("orig", "seg")
-        arr.append(Image.open(f"{target}/{fname}"))
-
-
-    # finally. generate mosaic images
-    basename = f"output/lvl{level}_overlap{overlap}_col{color_mode}.composite"
+    #Generate mosaic images
+    seg2d = build_mosaic_2d_array(images, filenames)
+    basename = f"output/{model_name}/composite"
     print(f"Generating mosaic images: {basename}")
 
-    out_borders = join_pieces(seg2d, show_borders=1)
-    out_borders.save(f"{basename}.borders.png")
-    out_borders.thumbnail([2000, 2000])
-    out_borders.save(f"{basename}.borders.THUMBNAIL.png")
+    out_borders = join_pieces(seg2d, show_borders=True)
+    out_borders_thumb = out_borders.copy()
+    out_borders_thumb.thumbnail([2000, 2000])
 
     out_clean = join_pieces(seg2d)
-    out_clean.save(f"{basename}.clean.png")
-    out_clean.thumbnail([2000, 2000])
-    out_clean.save(f"{basename}.clean.THUMBNAIL.png")
+    out_clean_thumb = out_clean.copy()
+    out_clean_thumb.thumbnail([2000, 2000])
+
+    if save_composite:
+        out_borders.save(f"{basename}.borders.png")
+        out_borders_thumb.save(f"{basename}.borders.THUMBNAIL.png")
+        out_clean.save(f"{basename}.clean.png")
+        out_clean_thumb.save(f"{basename}.clean.THUMBNAIL.png")
 
     print("\n\nFinished output generation\n\n")
+    return preds, out_borders_thumb, out_clean_thumb
 
 
 IDX_IMAGES = 0
@@ -186,13 +192,21 @@ if __name__ == "__main__":
     load_env()
 
     print("Loading source images")
-    images_1_color = load_mosaic(1, "color")
-    images_1_gray = load_mosaic(1, "grayscale")
+    images_1_color = load_mosaic_images(1, "color")
+
+    generate_outcomes(
+        filenames=images_1_color[IDX_FILENAMES],
+        images=images_1_color[IDX_IMAGES],
+        color_mode="color",
+        model_name=os.environ['model_name'],
+        save_pieces=True,
+        save_composite=True,
+    )
+
+    # images_1_gray = load_mosaic(1, "grayscale")
     # images_2_color = load_mosaic(2, "color")
     # images_2_gray = load_mosaic(2, "grayscale")
-
-    generate_outcomes(filenames=images_1_color[IDX_FILENAMES], images=images_1_color[IDX_IMAGES], level=1, color_mode="color", overlap=10)
-    generate_outcomes(filenames=images_1_gray[IDX_FILENAMES], images=images_1_gray[IDX_IMAGES], level=1, color_mode="grayscale", overlap=10)
+    # generate_outcomes(filenames=images_1_gray[IDX_FILENAMES], images=images_1_gray[IDX_IMAGES], level=1, color_mode="grayscale", overlap=10)
 
     # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=50)
     # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=30)

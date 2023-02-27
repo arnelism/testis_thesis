@@ -47,3 +47,14 @@ def get_image_loader(path: str, batch_size: int):
     )
 
     return train_batches
+
+
+def load_mosaic_pair(file_path):
+    return load_image(file_path), file_path
+
+def get_mosaic_loader_from_folder(path: str):
+    image_files = tf.data.Dataset.list_files(
+        f"{path}/*_orig.png", shuffle=True
+    )
+
+    images = image_files.map(load_pair, num_parallel_calls=AUTOTUNE)
