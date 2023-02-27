@@ -3,16 +3,20 @@ from tensorflow.python.data import AUTOTUNE
 
 
 def load_image(file_path):
-    input_image = tf.io.decode_png(tf.io.read_file(file_path), channels=3)
-    return tf.cast(input_image, tf.float32) / 255.0
+    return tf.io.decode_png(tf.io.read_file(file_path), channels=3)
 
 
 def get_seg_filename(file_path):
     return tf.strings.regex_replace(file_path, "_orig.png", "_seg.png")
 
 
+def load_seg_image(file_path):
+    image = load_image(get_seg_filename(file_path))
+    return tf.cast(image, tf.float32) / 255.0
+
+
 def load_pair(file_path):
-    return load_image(file_path), load_image(get_seg_filename(file_path))
+    return load_image(file_path), load_seg_image(file_path)
 
 
 def get_image_loader(path: str, batch_size: int):
