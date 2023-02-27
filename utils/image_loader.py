@@ -11,8 +11,16 @@ def get_seg_filename(file_path):
 
 
 def load_seg_image(file_path):
-    image = load_image(get_seg_filename(file_path))
-    return tf.cast(image, tf.float32) / 255.0
+    image = tf.io.decode_png(tf.io.read_file(get_seg_filename(file_path)), channels=4)
+
+    # rewrite blue channel based on alpha channel
+    # max blue when alpha==0(transparent img)
+    red, green, blue, alpha = tf.unstack(image, axis=-1)
+    return tf.stack ([
+        tf.cast(red, tf.float32)/255,
+        tf.cast(green, tf.float32)/128,
+        tf.cast(255-alpha, tf.float32)/255
+    ], axis=-1)
 
 
 def load_pair(file_path):
