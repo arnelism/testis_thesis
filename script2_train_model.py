@@ -116,9 +116,8 @@ def get_dataset_path(cfg: Args, mode: str) -> str:
         mid = ""
 
     slidefile = cfg.train_slidefile if mode == "train" else cfg.test_slidefile
-    full_slidefile = os.environ[f"slidefile_{slidefile}"]
 
-    return f"{os.environ['slides']}/{mid}{slidefile}/level{args.level}_overlap{args.overlap}/{mode}"
+    return f"{os.environ['slides']}/{mid}{slidefile}/level{cfg.level}_overlap{cfg.overlap}/{mode}"
 
 
 def get_date_str(now=datetime.now()):
