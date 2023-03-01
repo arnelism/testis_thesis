@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=12:00:00
+#SBATCH --time=23:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=arnelism@gmail.com
 #SBATCH --job-name gen_data

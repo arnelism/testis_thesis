@@ -141,6 +141,7 @@ def prepare_directory(path: str):
 def generate_outcomes(
         filenames: List[str],
         images: List[np.ndarray],
+        overlap: int,
         color_mode: str,
         model_name: str,
         save_pieces: bool,
@@ -157,20 +158,20 @@ def generate_outcomes(
 
     print("Saving segmentation slices")
     if save_pieces:
-        target = f"output/{model_name}/pieces"
+        target = f"output/{model_name}/pieces.{round(overlap*100)}"
         prepare_directory(target)
         save_output_images(target, preds, filenames)
 
     #Generate mosaic images
     seg2d = build_mosaic_2d_array(preds, filenames)
-    basename = f"output/{model_name}/composite"
+    basename = f"output/{model_name}/composite.{round(overlap*100)}"
     print(f"Generating mosaic images: {basename}")
 
-    out_borders = join_pieces(seg2d, show_borders=True)
+    out_borders = join_pieces(seg2d, overlap=overlap, show_borders=True)
     out_borders_thumb = out_borders.copy()
     out_borders_thumb.thumbnail([2000, 2000])
 
-    out_clean = join_pieces(seg2d)
+    out_clean = join_pieces(seg2d, overlap=overlap)
     out_clean_thumb = out_clean.copy()
     out_clean_thumb.thumbnail([2000, 2000])
 
@@ -197,6 +198,7 @@ if __name__ == "__main__":
     generate_outcomes(
         filenames=images_1_color[IDX_FILENAMES],
         images=images_1_color[IDX_IMAGES],
+        overlap=int(os.environ['mosaic_overlap']),
         color_mode="color",
         model_name=os.environ['model_name'],
         save_pieces=True,
