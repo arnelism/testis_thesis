@@ -30,7 +30,7 @@ def load_image(filename: str, color_mode: Literal["color", "grayscale"]) -> np.n
     return img / 255.0
 
 
-def load_mosaic_images(slide:str, level: int, overlap:int, color_mode: Literal["color", "grayscale"]) -> Tuple[List[np.ndarray], List[str]]:
+def load_mosaic_images(slide:str, level: int, overlap: int, color_mode: Literal["color", "grayscale"]) -> Tuple[List[np.ndarray], List[str]]:
     """
     loads all mosaic images in a folder to an unsorted 1d-array.
     """
@@ -143,7 +143,7 @@ def generate_outcomes(
         filenames: List[str],
         images: List[np.ndarray],
         slidename: str,
-        overlap: int,
+        overlap: float,
         color_mode: str,
         model_name: str,
         save_pieces: bool,
@@ -156,8 +156,13 @@ def generate_outcomes(
     print("\nPredicting segmentation slices\n")
     model = create_model(color_mode)
     model.load_weights(f"{os.environ['models']}/{model_name}/checkpoint.ckpt")
-    preds = model.predict(np.array(images))
 
+    mid = int(len(images)/2)
+    img1 = np.array(images[:mid])
+    img2 = np.array(images[mid:])
+    preds1 = model.predict(img1)
+    preds2 = model.predict(img2)
+    preds = np.concatenate([preds1, preds2])
     if save_pieces:
         print("Saving segmentation slices")
         target = f"output/{model_name}/pieces.{slidename}.{round(overlap*100)}"
@@ -201,7 +206,7 @@ if __name__ == "__main__":
         filenames=images_1_color[IDX_FILENAMES],
         images=images_1_color[IDX_IMAGES],
         slidename=os.environ['slidename'],
-        overlap=int(os.environ['mosaic_overlap']),
+        overlap=int(os.environ['mosaic_overlap'])/100,
         color_mode="color",
         model_name=os.environ['model_name'],
         save_pieces=True,
