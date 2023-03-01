@@ -30,17 +30,18 @@ def load_image(filename: str, color_mode: Literal["color", "grayscale"]) -> np.n
     return img / 255.0
 
 
-def load_mosaic_images(level: int, color_mode: Literal["color", "grayscale"]) -> Tuple[List[np.ndarray], List[str]]:
+def load_mosaic_images(slide:str, level: int, overlap:int, color_mode: Literal["color", "grayscale"]) -> Tuple[List[np.ndarray], List[str]]:
     """
     loads all mosaic images in a folder to an unsorted 1d-array.
     """
-    folder = f"{os.environ['workdir']}/inference/lvl{level}"
+    folder = f"{os.environ['workdir']}/inference/{slide}/lvl{level}_overlap{overlap}"
     path_length = len(folder)+1
     pathnames: List[str] = glob.glob(f"{folder}/row*_col*_orig.png")
     filenames = [f[path_length:] for f in pathnames]
 
+    print(f"Loading {len(filenames)} images")
     images = [load_image(f"{folder}/{f}", color_mode) for f in filenames]
-
+    print("done")
     return images, filenames
 
 
