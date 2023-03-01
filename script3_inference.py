@@ -142,6 +142,7 @@ def prepare_directory(path: str):
 def generate_outcomes(
         filenames: List[str],
         images: List[np.ndarray],
+        slidename: str,
         overlap: int,
         color_mode: str,
         model_name: str,
@@ -157,15 +158,15 @@ def generate_outcomes(
     model.load_weights(f"{os.environ['models']}/{model_name}/checkpoint.ckpt")
     preds = model.predict(np.array(images))
 
-    print("Saving segmentation slices")
     if save_pieces:
-        target = f"output/{model_name}/pieces.{round(overlap*100)}"
+        print("Saving segmentation slices")
+        target = f"output/{model_name}/pieces.{slidename}.{round(overlap*100)}"
         prepare_directory(target)
         save_output_images(target, preds, filenames)
 
     #Generate mosaic images
     seg2d = build_mosaic_2d_array(preds, filenames)
-    basename = f"output/{model_name}/composite.{round(overlap*100)}"
+    basename = f"output/{model_name}/composite.{slidename}.{round(overlap*100)}"
     print(f"Generating mosaic images: {basename}")
 
     out_borders = join_pieces(seg2d, overlap=overlap, show_borders=True)
@@ -194,11 +195,12 @@ if __name__ == "__main__":
     load_env()
 
     print("Loading source images")
-    images_1_color = load_mosaic_images(1, "color")
+    images_1_color = load_mosaic_images(os.environ['slidename'], 1, int(os.environ['mosaic_overlap']), "color")
 
     generate_outcomes(
         filenames=images_1_color[IDX_FILENAMES],
         images=images_1_color[IDX_IMAGES],
+        slidename=os.environ['slidename'],
         overlap=int(os.environ['mosaic_overlap']),
         color_mode="color",
         model_name=os.environ['model_name'],
