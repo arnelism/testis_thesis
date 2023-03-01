@@ -8,6 +8,8 @@ wandb/
 env_thesis/
 tmp/
 
+__local.env
+__train.env
 __tmp*
 __images/
 overrides.env

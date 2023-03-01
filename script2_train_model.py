@@ -110,14 +110,16 @@ def create_model(color_mode, backbone="resnet34"):
 
 
 def get_dataset_path(cfg: Args, mode: str) -> str:
-    if cfg.train_slidefile != cfg.test_slidefile:
-        mid = "trainonly/" if mode == "train" else "testonly/"
-    else:
-        mid = ""
+    # if cfg.train_slidefile != cfg.test_slidefile:
+    #     mid = "trainonly/" if mode == "train" else "testonly/"
+    # else:
+    #     mid = ""
 
     slidefile = cfg.train_slidefile if mode == "train" else cfg.test_slidefile
+    if slidefile == "all":
+        slidefile = "*"
 
-    return f"{os.environ['slides']}/{mid}{slidefile}/level{cfg.level}_overlap{cfg.overlap}/{mode}"
+    return f"{os.environ['slides']}/{slidefile}/level{cfg.level}_overlap{cfg.overlap}/{mode}"
 
 
 def get_date_str(now=datetime.now()):
