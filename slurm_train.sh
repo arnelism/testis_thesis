@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition gpu
-#SBATCH --time=08:00:00
+#SBATCH --time=23:59:00
 #SBATCH --gres=gpu:a100-40g:1
 #SBATCH --mem 64000
 #SBATCH --job-name train_testis_model
