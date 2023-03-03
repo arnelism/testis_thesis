@@ -8,6 +8,7 @@
 # It's the main output of the project once it works well
 
 from settings import load_env
+from slide_utils import load_annotations, Bounds
 from utils.model import create_model
 
 from typing import List, Literal, Tuple
@@ -93,7 +94,7 @@ def build_mosaic_2d_array(images: List[np.ndarray], filenames: List[str]) -> Lis
     return arr2d
 
 
-def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=False) -> Image.Image:
+def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=False, expected_size: Tuple[int, int] = None) -> Image.Image:
     """
     Joins 2d-array of images into one large image.
     """
@@ -104,8 +105,10 @@ def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=Fals
     result_height = int(piece_height * (1-overlap) * len(pieces))
 
     output = Image.new("RGB", (result_width, result_height))
-
+    cut_pieces = []
     for row in range(len(pieces)):
+        cut_pieces.append([])
+        cut_row = cut_pieces[row]
         for col in range(len(pieces[row])):
             img = pieces[row][col]
             region = img.crop((
@@ -114,6 +117,7 @@ def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=Fals
                 (int(piece_width * (1 - overlap / 2))),
                 (int(piece_height * (1 - overlap / 2)))
             ))
+            cut_row.append(region)
 
             if show_borders:
                 drw = ImageDraw.Draw(region)
@@ -125,6 +129,18 @@ def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=Fals
             )
 
             output.paste(region, pos)
+
+    if expected_size is not None:
+        # remove additional overlap/2 from top and left
+        # set right and bottom to desired size
+        left_padding = int(piece_width * overlap / 2)
+        top_padding = int(piece_height * overlap / 2)
+        return output.crop((
+            left_padding,
+            top_padding,
+            left_padding+expected_size[0],
+            top_padding+expected_size[1]
+        ))
 
     return output
 
@@ -139,6 +155,22 @@ def prepare_directory(path: str):
     os.makedirs(path)
 
 
+def get_area_size(slidename, region, level):
+
+    annotations = load_annotations(os.environ.get(f'annotations_{slidename}'), (0,0))
+    region = annotations.regions[region]
+
+    bounds = Bounds(
+        topleft=region[0],
+        topright=region[1],
+        bottomleft=region[3],
+        bottomright=region[2],
+        zoom_level=level,
+    )
+
+    return bounds.get_size()
+
+
 def generate_outcomes(
         filenames: List[str],
         images: List[np.ndarray],
@@ -146,6 +178,7 @@ def generate_outcomes(
         overlap: float,
         color_mode: str,
         model_name: str,
+        area_size: (int, int),
         save_pieces: bool,
         save_composite: bool,
 ):
@@ -174,11 +207,11 @@ def generate_outcomes(
     basename = f"output/{model_name}/composite.{slidename}.{round(overlap*100)}"
     print(f"Generating mosaic images: {basename}")
 
-    out_borders = join_pieces(seg2d, overlap=overlap, show_borders=True)
+    out_borders = join_pieces(seg2d, overlap=overlap, show_borders=True, expected_size=area_size)
     out_borders_thumb = out_borders.copy()
     out_borders_thumb.thumbnail([2000, 2000])
 
-    out_clean = join_pieces(seg2d, overlap=overlap)
+    out_clean = join_pieces(seg2d, overlap=overlap, expected_size=area_size)
     out_clean_thumb = out_clean.copy()
     out_clean_thumb.thumbnail([2000, 2000])
 
