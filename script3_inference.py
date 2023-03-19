@@ -1,4 +1,5 @@
 # Script for inference (step 3 of 3)
+from openslide import OpenSlide
 
 # takes a trained model and pre-generated mosaic slides
 # (inference mode, regular slides not random)
@@ -8,7 +9,7 @@
 # It's the main output of the project once it works well
 
 from settings import load_env
-from slide_utils import load_annotations, Bounds
+from slide_utils import load_annotations, Bounds, X_COORD, Y_COORD
 from utils.model import create_model
 
 from typing import List, Literal, Tuple
@@ -94,6 +95,46 @@ def build_mosaic_2d_array(images: List[np.ndarray], filenames: List[str]) -> Lis
     return arr2d
 
 
+def get_slices(slide: OpenSlide, bounds: Bounds, level: int, overlap: float, slice_size=512):
+    zoom = int(pow(2, level))
+
+    # 512*0.50 / 2 = 256/2 = 128
+    # 512*0.25 / 2 = 128/2 =  64  (smaller buffer area since we're using more of the initial image
+    padding = int(slice_size * overlap / 2)
+    final_padding = zoom * padding
+
+    topleft_corner_slide_coords = (
+        bounds.topleft[X_COORD] - final_padding,
+        bounds.topleft[Y_COORD] - final_padding,
+    )
+
+    tubule_area_width, tubule_area_height = (
+        bounds.get_width() + final_padding * 2,
+        bounds.get_height() + final_padding * 2,
+    )
+
+    pieces = []
+    shift = slice_size * (1 - overlap) * zoom
+    # sliceify
+    slice_x, slice_y = 0, 0
+    while slice_y < tubule_area_height:
+        slice_x = 0
+        row = []
+        while slice_x < tubule_area_width:
+            tl = (
+                topleft_corner_slide_coords[X_COORD] + slice_x,
+                topleft_corner_slide_coords[Y_COORD] + slice_y,
+            )
+            img = slide.read_region(location=tl, level=level, size=(slice_size, slice_size))
+            row.append(img)
+            slice_x = int(slice_x + shift )
+
+        pieces.append(row)
+        slice_y = int(slice_y + shift)
+
+    return pieces
+
+
 def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=False, expected_size: Tuple[int, int] = None) -> Image.Image:
     """
     Joins 2d-array of images into one large image.
@@ -105,10 +146,7 @@ def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=Fals
     result_height = int(piece_height * (1-overlap) * len(pieces))
 
     output = Image.new("RGB", (result_width, result_height))
-    cut_pieces = []
     for row in range(len(pieces)):
-        cut_pieces.append([])
-        cut_row = cut_pieces[row]
         for col in range(len(pieces[row])):
             img = pieces[row][col]
             region = img.crop((
@@ -117,7 +155,6 @@ def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=Fals
                 (int(piece_width * (1 - overlap / 2))),
                 (int(piece_height * (1 - overlap / 2)))
             ))
-            cut_row.append(region)
 
             if show_borders:
                 drw = ImageDraw.Draw(region)
@@ -131,15 +168,17 @@ def join_pieces(pieces: List[List[Image.Image]], overlap=0.25, show_borders=Fals
             output.paste(region, pos)
 
     if expected_size is not None:
-        # remove additional overlap/2 from top and left
+        # inference region might not map to slices precisely. cut down excess
         # set right and bottom to desired size
-        left_padding = int(piece_width * overlap / 2)
-        top_padding = int(piece_height * overlap / 2)
+
+        if expected_size[0] > result_width or expected_size[1] > result_height:
+            raise Exception(f"Expected size larger than slide area! {expected_size} vs {(result_width, result_height)}")
+
         return output.crop((
-            left_padding,
-            top_padding,
-            left_padding+expected_size[0],
-            top_padding+expected_size[1]
+            0,
+            0,
+            expected_size[0],
+            expected_size[1]
         ))
 
     return output
