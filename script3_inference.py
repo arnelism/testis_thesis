@@ -19,6 +19,8 @@ import os
 import glob
 import shutil
 
+Image.MAX_IMAGE_PIXELS = None
+
 
 def load_image(filename: str, color_mode: Literal["color", "grayscale"]) -> np.ndarray:
     img = Image.open(filename)
