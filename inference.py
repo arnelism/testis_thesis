@@ -1,6 +1,8 @@
 # Script for inference (step 3 of 3)
 from openslide import OpenSlide
+from sklearn.metrics import jaccard_score
 
+from available_models import available_models
 # takes a trained model and pre-generated mosaic slides
 # (inference mode, regular slides not random)
 # predicts the output from the slides, saves them and
@@ -8,11 +10,10 @@ from openslide import OpenSlide
 
 # It's the main output of the project once it works well
 
-from settings import load_env
 from slide_utils import load_annotations, Bounds, X_COORD, Y_COORD
 from utils.model import create_model
 
-from typing import List, Literal, Tuple
+from typing import List, Literal, Tuple, TypedDict
 from PIL import ImageDraw, Image
 import numpy as np
 import os
@@ -212,6 +213,8 @@ def get_area_size(slidename, region, level):
     return bounds.get_size()
 
 
+# predicts segmentation patches from source images and builds composite image
+# also saves the pieces and composite images
 def generate_outcomes(
         filenames: List[str],
         images: List[np.ndarray],
@@ -266,38 +269,88 @@ def generate_outcomes(
     return preds, out_borders_thumb, out_clean_thumb
 
 
+
 IDX_IMAGES = 0
 IDX_FILENAMES = 1
 
 
-if __name__ == "__main__":
-    load_env()
+class InferenceConfig(TypedDict):
+    slidename: str
+    area_name: str
+    slide_overlap: int
+    level: int
+    tubule_area: int
+    color_mode: Literal["color", "grayscale"]
+    model_name: str
 
-    print("Loading source images")
-    images_1_color = load_mosaic_images(os.environ['slidename'], 1, int(os.environ['mosaic_overlap']), "color")
 
+# apply the model to a slide pieces
+def gen_outcomes_and_calc_iou(cfg: InferenceConfig):
+    print(cfg)
+    images = load_mosaic_images(cfg["slidename"], cfg["level"], cfg["slide_overlap"], cfg["color_mode"])
     generate_outcomes(
-        filenames=images_1_color[IDX_FILENAMES],
-        images=images_1_color[IDX_IMAGES],
-        slidename=os.environ['slidename'],
-        overlap=int(os.environ['mosaic_overlap'])/100,
-        color_mode="color",
-        model_name=os.environ['model_name'],
+        filenames=images[IDX_FILENAMES],
+        images=images[IDX_IMAGES],
+        slidename=cfg['slidename'],
+        overlap=cfg['slide_overlap'] / 100,
+        color_mode=cfg["color_mode"],
+        model_name=cfg["model_name"],
+        area_size=get_area_size(cfg['slidename'], cfg['area_name'], cfg["level"]),
         save_pieces=True,
         save_composite=True,
     )
 
-    # images_1_gray = load_mosaic(1, "grayscale")
-    # images_2_color = load_mosaic(2, "color")
-    # images_2_gray = load_mosaic(2, "grayscale")
-    # generate_outcomes(filenames=images_1_gray[IDX_FILENAMES], images=images_1_gray[IDX_IMAGES], level=1, color_mode="grayscale", overlap=10)
+    iou = calc_mosaic_iou(cfg["level"], cfg["tubule_area"], cfg["color_mode"], cfg["slidename"], cfg["slide_overlap"])
+    target = f"output/{cfg['model_name']}/iou.{cfg['slidename']}.{cfg['slide_overlap']}.txt"
+    with open(target, "w") as f:
+        f.write(str(iou))
 
-    # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=50)
-    # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=30)
-    # generate_outcomes(filenames=images_2_color[IDX_FILENAMES], images=images_2_color[IDX_IMAGES], level=2, color_mode="color", overlap=10)
-    #
-    # generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=50)
-    # generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=30)
-    # generate_outcomes(filenames=images_2_gray[IDX_FILENAMES], images=images_2_gray[IDX_IMAGES], level=2, color_mode="grayscale", overlap=10)
 
-    print("Script finished")
+CH_BORDER = 0
+CH_TUBULE = 1
+CH_BACKGR = 2
+
+
+def calc_mosaic_iou(level: int, tubule_area: int, color_mode: str, slide: str, overlap: int) -> float:
+    inference = os.environ['inference_slides']
+    output = os.environ['output']
+    model = available_models[(level, tubule_area, color_mode)]
+
+    print(f"Calculating iou for model={model}, slide={slide}, overlap={overlap}")
+
+    y_true = np.array(Image.open(f"{inference}/{slide}/ground_truth_level{level}_model.png"))
+    y_pred = np.array(Image.open(f"{output}/{model}/composite.{slide}.{overlap}.clean.png"))[:, :, :3]
+    print(y_true.shape, y_pred.shape)
+
+    if y_true.shape != y_pred.shape:
+        raise Exception(f"Shape mismatch! {y_true.shape} vs {y_pred.shape}")
+
+    iou = round(jaccard_score(y_true.ravel(), y_pred.ravel(), average='weighted'), 3)
+    print(iou)
+    return iou
+
+
+def get_configs(level: int, tubule_area: int, color_mode: str, model_name: str) -> List[InferenceConfig]:
+    common = {
+        "level": level,
+        "tubule_area": tubule_area,
+        "color_mode": color_mode,
+        "model_name": model_name,
+    }
+
+    return [
+        {"slidename": "alpha", "area_name": "Test Region A", "slide_overlap": 25} | common,
+        {"slidename": "alpha", "area_name": "Test Region A", "slide_overlap": 50} | common,
+
+        {"slidename": "beta", "area_name": "Test Region C", "slide_overlap": 25} | common,
+        {"slidename": "beta", "area_name": "Test Region C", "slide_overlap": 50} | common,
+
+        {"slidename": "gamma", "area_name": "Test Region Gamma2", "slide_overlap": 25} | common,
+        {"slidename": "gamma", "area_name": "Test Region Gamma2", "slide_overlap": 50} | common,
+    ]
+
+
+def run_model_on_all_slides(level: int, tubule_area: int, color_mode: str,):
+    configs = get_configs(level, tubule_area, color_mode, available_models[(level, tubule_area, color_mode)])
+    for cfg in configs:
+        gen_outcomes_and_calc_iou(cfg)
