@@ -136,8 +136,8 @@ def run_pipeline(cfg: Args):
 
 
     # create data loader
-    train_data = get_image_loader(get_dataset_path(cfg, "train"), cfg.batch_size)
-    test_data = get_image_loader(get_dataset_path(cfg, "test"), cfg.batch_size)
+    train_data = get_image_loader(get_dataset_path(cfg, "train"), cfg.batch_size, color_mode=color_mode)
+    test_data = get_image_loader(get_dataset_path(cfg, "test"), cfg.batch_size, color_mode=color_mode)
     print(f"Loaded dataset (level={level}, overlap={overlap})")
 
     # create model
