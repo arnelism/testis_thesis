@@ -142,8 +142,8 @@ def run_pipeline(cfg: Args):
 
     # create model
     model_name = f"{cfg.train_slidefile}{cfg.test_slidefile}_level{level}_overlap{overlap}_{color_mode}_{get_date_str()}"
-    if args.name is not None:
-        model_name = f"{args.name}_{model_name}"
+    if cfg.name is not None:
+        model_name = f"{cfg.name}_{model_name}"
 
     model_path = f"{os.environ['models']}/{model_name}"
     model = create_model(color_mode, backbone)
