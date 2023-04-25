@@ -7,6 +7,11 @@ available_models = {
     (2, 10, "color"):   "allall_level2_overlap10_color_2023-03-02_0348",
     (2, 30, "color"):   "allall_level2_overlap30_color_2023-04-23_0106",
 
+    (1, 1, "grayscale"):   "allall_level1_overlap1_grayscale_2023-04-24_2309",
     (1, 10, "grayscale"):   "allall_level1_overlap10_grayscale_2023-04-24_1450",
+    (1, 30, "grayscale"):   "allall_level1_overlap30_grayscale_2023-04-24_2310",
+    
+    (2, 1, "grayscale"):   "allall_level2_overlap1_grayscale_2023-04-24_2310",
     (2, 10, "grayscale"):   "allall_level2_overlap10_grayscale_2023-04-24_1844",
+    (2, 30, "grayscale"):   "allall_level2_overlap30_grayscale_2023-04-25_0333",
 }
