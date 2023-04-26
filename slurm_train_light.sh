@@ -1,7 +1,8 @@
 #!/bin/bash
 #SBATCH --partition gpu
 #SBATCH --time=23:59:00
-#SBATCH --gres=gpu:V100-32g:1
+#SBATCH --gres=gpu:tesla
+#SBATCH --nodelist=Falcon[4-6]
 #SBATCH --mem 64000
 #SBATCH --job-name train_testis_model
 #SBATCH --output work/slurm_logs/%J_train_log.txt
@@ -16,4 +17,4 @@ source env_thesis/bin/activate
 
 echo "Environment initialized. Running training script"
 
-python script2_train_model.py
+python batch_size=32 script2_train_model.py
