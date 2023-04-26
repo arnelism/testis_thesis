@@ -3,6 +3,7 @@ from typing import Literal
 
 import numpy as np
 import scipy
+from skimage.morphology import binary_dilation
 
 from image_utils import CH_BORDER, CH_TUBULE, CH_BACKGR
 import skimage
@@ -91,7 +92,7 @@ def post_process(seg: np.ndarray, thresholding: Literal["argmax", "otsu"], level
     tubules = get_clean_tubules(clean, 6000 if level == 1 else 1500)
 
     print("\tdilating tubules. Might take a while")
-    big_tub = skimage.morphology.binary_dilation(tubules, circle(100 if level == 1 else 25))
+    big_tub = binary_dilation(tubules, circle(100 if level == 1 else 25))
 
     #XXX do we want to remove pepper from borders?
     print("\tunpeppering borders")

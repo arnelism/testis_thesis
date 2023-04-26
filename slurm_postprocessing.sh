@@ -7,6 +7,9 @@
 
 # Some modules
 module load any/python
+module load openslide
 source env_thesis/bin/activate
+
+echo "Running post-processing"
 
 python script4_post_processing.py
