@@ -7,6 +7,8 @@
 
 # Some modules
 module load any/python
+module load cuda
+module load cudnn
 module load openslide
 source env_thesis/bin/activate
 
