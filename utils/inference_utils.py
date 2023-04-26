@@ -37,7 +37,7 @@ def get_configs(level: int, tubule_area: int, color_mode: str, generation: int) 
 
 
 def perform_on_all_slides(level: int, tubule_area: int, color_mode: Literal["color", "grayscale"], generation: int, func: Callable[[InferenceConfig], None]):
-    configs = get_configs(level, tubule_area, color_mode, available_models[(level, tubule_area, color_mode, generation)])
+    configs = get_configs(level, tubule_area, color_mode, generation)
     print(f"Running callback on {len(configs)} configs\n")
 
     for cfg in configs:
