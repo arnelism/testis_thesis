@@ -4,6 +4,7 @@
 #SBATCH --mail-user=arnelism@gmail.com
 #SBATCH --job-name postproc
 #SBATCH --output work/slurm_logs/%J_postproc_log.txt
+#SBATCH --mem 64000
 
 # Some modules
 module load any/python
