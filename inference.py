@@ -300,7 +300,7 @@ def gen_outcomes_and_calc_iou(cfg: InferenceConfig):
         save_composite=True,
     )
 
-    iou = calc_mosaic_iou(cfg["level"], cfg["tubule_area"], cfg["color_mode"], cfg["slidename"], cfg["slide_overlap"])
+    iou = calc_mosaic_iou(cfg["level"], cfg["slidename"], cfg["slide_overlap"], cfg["model_name"])
     target = f"output/{cfg['model_name']}/iou.{cfg['slidename']}.{cfg['slide_overlap']}.txt"
     with open(target, "w") as f:
         f.write(str(iou))
@@ -311,10 +311,9 @@ CH_TUBULE = 1
 CH_BACKGR = 2
 
 
-def calc_mosaic_iou(level: int, tubule_area: int, color_mode: str, slide: str, overlap: int) -> float:
+def calc_mosaic_iou(level: int, slide: str, overlap: int, model: str) -> float:
     inference = os.environ['inference_slides']
     output = os.environ['output']
-    model = available_models[(level, tubule_area, color_mode)]
 
     print(f"Calculating iou for model={model}, slide={slide}, overlap={overlap}")
 
