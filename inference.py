@@ -241,12 +241,15 @@ def generate_outcomes(
     begin = 0
     end = min(BATCH_SIZE, len(images))
     print(f"number of images: {len(images)}, inferencing in {math.ceil(len(images) / BATCH_SIZE)} batches")
-    preds = []
+    preds = None
     while begin < len(images):
         print(f"Inferencing batch from {begin} to {end}")
         input = np.array(images[begin:end])
         output = model.predict(input)
-        preds = np.concatenate([preds, output])
+        if preds is None:
+            preds = output
+        else:
+            preds = np.concatenate([preds, output])
 
         begin += BATCH_SIZE
         end += BATCH_SIZE
