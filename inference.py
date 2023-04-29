@@ -1,4 +1,6 @@
 # Script for inference (step 3 of 3)
+import math
+
 from openslide import OpenSlide
 from sklearn.metrics import jaccard_score
 
@@ -234,12 +236,22 @@ def generate_outcomes(
     model = create_model(color_mode)
     model.load_weights(f"{os.environ['models']}/{model_name}/checkpoint.ckpt")
 
-    mid = int(len(images)/2)
-    img1 = np.array(images[:mid])
-    img2 = np.array(images[mid:])
-    preds1 = model.predict(img1)
-    preds2 = model.predict(img2)
-    preds = np.concatenate([preds1, preds2])
+    # divide into pieces of 500 images
+    BATCH_SIZE = 500
+    begin = 0
+    end = min(BATCH_SIZE, len(images))
+    print(f"number of images: {len(images)}, inferencing in {math.ceil(len(images) / BATCH_SIZE)} batches")
+    preds = []
+    while begin < len(images):
+        print(f"Inferencing batch from {begin} to {end}")
+        input = np.array(images[begin:end])
+        output = model.predict(input)
+        preds = np.concatenate([preds, output])
+
+        begin += BATCH_SIZE
+        end += BATCH_SIZE
+        end = min(end, len(images))
+
     if save_pieces:
         print("Saving segmentation slices")
         target = f"output/{model_name}/pieces.{slidename}.{round(overlap*100)}"

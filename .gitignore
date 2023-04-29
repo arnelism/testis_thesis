@@ -7,7 +7,7 @@ work/
 wandb/
 env_thesis/
 tmp/
-
+__*
 __local.env
 __train.env
 __tmp*
